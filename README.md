@@ -5,11 +5,16 @@ A simple Selenium test project that automatically tests a newsletter subscriptio
 ## 📸 What We're Testing
 
 ### Newsletter Page
-![img.png](img.png)
+![img.png](Newsletter%20Page.png)
 *The main newsletter subscription form with email input and subscribe button*
 
+### Error Message
+![img_2.png](Success%20Modal.png)
+*This is the error state displayed when a user attempts to submit the newsletter form with an invalid or empty email address.*
+
 ### Success Modal
-![img_1.png](img_1.png)
+![img_1.png](Success%20Modal.png)
+
 *Success confirmation modal that appears after successful subscription*
 
 ## 🎯 What This Project Does
@@ -134,11 +139,11 @@ Want to get notified when tests run? Add these to your GitHub repository secrets
 📧 Email entered: ss
 ⚠️ Error message found: true
 ⚠️ Error message: Valid email required
-📧 Email entered: emmanuelarhu706@gmail.com
+📧 Email entered: gtp.2025@amalitechtraining.org
 ✅ Success modal found: true
 📄 Success message: Thanks for subscribing!
 ✅ Success icon: true
-📧 Email verification: Expected=emmanuelarhu706@gmail.com, Found=true
+📧 Email verification: Expected=gtp.2025@amalitechtraining.org, Found=true
 ✅ Dismiss button clicked
 ✅ Newsletter subscription test completed successfully!
 ```
