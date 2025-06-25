@@ -117,9 +117,9 @@ jobs:
     if: always()  # Run even if tests fail
 
     steps:
-      # Step 1: Send Slack Notification - FIXED: Proper parameters
+      # Step 1: Send Slack Notification - FIXED: Proper secret checking
       - name: 📱 Send Slack Notification
-        if: always() && secrets.SLACK_WEBHOOK_URL != ''
+        if: always()
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ needs.test.result }}
@@ -142,7 +142,7 @@ jobs:
       - name: 📋 Notification Status
         if: always()
         run: |
-          if [ "${{ secrets.SLACK_WEBHOOK_URL }}" != "" ]; then
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
             echo "📱 Slack notification: Configured ✅"
             echo "✅ Notifications sent to your #selenium-tests channel!"
           else
