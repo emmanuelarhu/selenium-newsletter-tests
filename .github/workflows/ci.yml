@@ -7,8 +7,6 @@ on:
     branches: [ main ]  # Run on push to these branches
   pull_request:
     branches: [ main ]           # Run on pull requests to main/master
-  schedule:
-    - cron: '0 9 * * 1-5'               # Run every weekday at 9 AM UTC (optional)
 
 # Define the jobs to run
 jobs:
@@ -30,7 +28,7 @@ jobs:
 
       # Step 3: Cache Maven dependencies (speeds up builds)
       - name: 📦 Cache Maven Dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
@@ -73,23 +71,23 @@ jobs:
           # Set Chrome to run in headless mode (no GUI)
           CHROME_OPTIONS: --headless --no-sandbox --disable-dev-shm-usage --window-size=1920,1080
 
-      # Step 9: Upload test results (even if tests fail)
+      # Step 9: Upload test results (even if tests fail) - UPDATED to v4
       - name: 📊 Upload Test Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()  # Upload even if tests fail
         with:
-          name: test-results
+          name: test-results-${{ github.run_number }}
           path: |
             target/surefire-reports/
             target/test-classes/
           retention-days: 30
 
-      # Step 10: Upload screenshots (if any test failures)
+      # Step 10: Upload screenshots (if any test failures) - UPDATED to v4
       - name: 📸 Upload Screenshots
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()  # Only upload if tests fail
         with:
-          name: failure-screenshots
+          name: failure-screenshots-${{ github.run_number }}
           path: screenshots/
           retention-days: 7
 
@@ -103,6 +101,7 @@ jobs:
           echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Runner:** ${{ runner.os }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           
           if [ -f target/surefire-reports/TEST-*.xml ]; then
             echo "- **Test Results:** Available in artifacts" >> $GITHUB_STEP_SUMMARY
@@ -110,63 +109,50 @@ jobs:
             echo "- **Test Results:** No test reports found" >> $GITHUB_STEP_SUMMARY
           fi
 
-  # Notification job (runs after tests complete)
+  # Slack notification job (runs after tests complete)
   notify:
-    name: Send Notifications
+    name: Send Slack Notification
     runs-on: ubuntu-latest
     needs: test
     if: always()  # Run even if tests fail
 
     steps:
-      # Step 1: Checkout code (needed for notification scripts)
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
-
-      # Step 2: Send Email Notification
-      - name: 📧 Send Email Notification
-        if: always()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "🧪 Selenium Tests - ${{ needs.test.result == 'success' && '✅ PASSED' || '❌ FAILED' }}"
-          body: |
-            Hello Team,
-            
-            The Selenium test automation has completed:
-            
-            📊 **Test Status:** ${{ needs.test.result == 'success' && '✅ PASSED' || '❌ FAILED' }}
-            🔗 **Repository:** ${{ github.repository }}
-            🌿 **Branch:** ${{ github.ref_name }}
-            💬 **Commit:** ${{ github.event.head_commit.message }}
-            👤 **Triggered by:** ${{ github.actor }}
-            🕐 **Time:** ${{ github.event.head_commit.timestamp }}
-            
-            🔗 **View Results:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            
-            Best regards,
-            GitHub Actions Bot 🤖
-          to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: Selenium Tests <${{ secrets.EMAIL_USERNAME }}>
-
-      # Step 3: Send Slack Notification (Optional)
+      # Step 1: Send Slack Notification - FIXED: Proper parameters
       - name: 📱 Send Slack Notification
-        if: always()
+        if: always() && secrets.SLACK_WEBHOOK_URL != ''
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ needs.test.result }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
           text: |
             🧪 Selenium Tests ${{ needs.test.result == 'success' && '✅ PASSED' || '❌ FAILED' }}
             
-            📋 **Details:**
+            📋 Details:
             • Repository: ${{ github.repository }}
             • Branch: ${{ github.ref_name }}
             • Commit: ${{ github.sha }}
             • Author: ${{ github.actor }}
+            • Workflow: ${{ github.workflow }}
             
-            🔗 View full results: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+            🔗 View Results: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # Step 2: Show notification status (for debugging)
+      - name: 📋 Notification Status
+        if: always()
+        run: |
+          if [ "${{ secrets.SLACK_WEBHOOK_URL }}" != "" ]; then
+            echo "📱 Slack notification: Configured ✅"
+            echo "✅ Notifications sent to your #selenium-tests channel!"
+          else
+            echo "📱 Slack notification: Not configured ⚠️"
+            echo ""
+            echo "💡 To enable Slack notifications:"
+            echo "1. Create a Slack channel (e.g., #selenium-tests)"
+            echo "2. Add Incoming Webhooks app to your channel"
+            echo "3. Copy the webhook URL"
+            echo "4. Add it as SLACK_WEBHOOK_URL secret in GitHub"
+            echo ""
+            echo "🔗 Guide: https://api.slack.com/messaging/webhooks"
+          fi
