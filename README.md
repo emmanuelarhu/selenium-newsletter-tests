@@ -9,7 +9,8 @@ A simple Selenium test project that automatically tests a newsletter subscriptio
 *The main newsletter subscription form with email input and subscribe button*
 
 ### Error Message
-![img_2.png](Success%20Modal.png)
+![img_2.png](Error%20Message.png)
+
 *This is the error state displayed when a user attempts to submit the newsletter form with an invalid or empty email address.*
 
 ### Success Modal
