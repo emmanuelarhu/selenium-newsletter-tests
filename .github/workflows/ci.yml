@@ -1,0 +1,172 @@
+# GitHub Actions CI Pipeline for Selenium Tests
+name: Selenium Test Automation
+
+# When to run this workflow
+on:
+  push:
+    branches: [ main, master, develop ]  # Run on push to these branches
+  pull_request:
+    branches: [ main, master ]           # Run on pull requests to main/master
+  schedule:
+    - cron: '0 9 * * 1-5'               # Run every weekday at 9 AM UTC (optional)
+
+# Define the jobs to run
+jobs:
+  test:
+    name: Run Selenium Tests
+    runs-on: ubuntu-latest              # Use Ubuntu runner (free)
+
+    steps:
+      # Step 1: Get the code from repository
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Java 21
+      - name: ☕ Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'          # Eclipse Temurin JDK
+
+      # Step 3: Cache Maven dependencies (speeds up builds)
+      - name: 📦 Cache Maven Dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      # Step 4: Install Chrome browser (needed for Selenium)
+      - name: 🌐 Install Chrome Browser
+        uses: browser-actions/setup-chrome@latest
+
+      # Step 5: Download ChromeDriver automatically
+      - name: 🚗 Setup ChromeDriver
+        uses: nanasess/setup-chromedriver@master
+
+      # Step 6: Verify Java and Maven versions
+      - name: 🔍 Verify Environment
+        run: |
+          echo "Java version:"
+          java -version
+          echo "Maven version:"
+          mvn -version
+          echo "Chrome version:"
+          google-chrome --version
+          echo "ChromeDriver version:"
+          chromedriver --version
+
+      # Step 7: Clean and compile the project
+      - name: 🧹 Clean and Compile
+        run: |
+          echo "🧹 Cleaning project..."
+          mvn clean
+          echo "🔨 Compiling project..."
+          mvn compile test-compile
+
+      # Step 8: Run the Selenium tests
+      - name: 🧪 Run Selenium Tests
+        run: |
+          echo "🚀 Starting Selenium tests..."
+          mvn test -Dheadless=true
+        env:
+          # Set Chrome to run in headless mode (no GUI)
+          CHROME_OPTIONS: --headless --no-sandbox --disable-dev-shm-usage --window-size=1920,1080
+
+      # Step 9: Upload test results (even if tests fail)
+      - name: 📊 Upload Test Results
+        uses: actions/upload-artifact@v3
+        if: always()  # Upload even if tests fail
+        with:
+          name: test-results
+          path: |
+            target/surefire-reports/
+            target/test-classes/
+          retention-days: 30
+
+      # Step 10: Upload screenshots (if any test failures)
+      - name: 📸 Upload Screenshots
+        uses: actions/upload-artifact@v3
+        if: failure()  # Only upload if tests fail
+        with:
+          name: failure-screenshots
+          path: screenshots/
+          retention-days: 7
+
+      # Step 11: Generate test summary
+      - name: 📋 Generate Test Summary
+        if: always()
+        run: |
+          echo "## 🧪 Test Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner:** ${{ runner.os }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f target/surefire-reports/TEST-*.xml ]; then
+            echo "- **Test Results:** Available in artifacts" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Test Results:** No test reports found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Notification job (runs after tests complete)
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()  # Run even if tests fail
+
+    steps:
+      # Step 1: Checkout code (needed for notification scripts)
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Send Email Notification
+      - name: 📧 Send Email Notification
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "🧪 Selenium Tests - ${{ needs.test.result == 'success' && '✅ PASSED' || '❌ FAILED' }}"
+          body: |
+            Hello Team,
+            
+            The Selenium test automation has completed:
+            
+            📊 **Test Status:** ${{ needs.test.result == 'success' && '✅ PASSED' || '❌ FAILED' }}
+            🔗 **Repository:** ${{ github.repository }}
+            🌿 **Branch:** ${{ github.ref_name }}
+            💬 **Commit:** ${{ github.event.head_commit.message }}
+            👤 **Triggered by:** ${{ github.actor }}
+            🕐 **Time:** ${{ github.event.head_commit.timestamp }}
+            
+            🔗 **View Results:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Best regards,
+            GitHub Actions Bot 🤖
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: Selenium Tests <${{ secrets.EMAIL_USERNAME }}>
+
+      # Step 3: Send Slack Notification (Optional)
+      - name: 📱 Send Slack Notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ needs.test.result }}
+          text: |
+            🧪 Selenium Tests ${{ needs.test.result == 'success' && '✅ PASSED' || '❌ FAILED' }}
+            
+            📋 **Details:**
+            • Repository: ${{ github.repository }}
+            • Branch: ${{ github.ref_name }}
+            • Commit: ${{ github.sha }}
+            • Author: ${{ github.actor }}
+            
+            🔗 View full results: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
