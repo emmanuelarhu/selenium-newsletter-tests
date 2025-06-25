@@ -6,8 +6,8 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 
-import java.time.Duration;
 import java.io.File;
+import java.time.Duration;
 
 public class BaseTest {
     protected WebDriver driver;
@@ -17,36 +17,57 @@ public class BaseTest {
     public void setUp() {
         System.out.println("🚀 Starting browser setup...");
 
-        // Set the path to your ChromeDriver executable
-        String chromeDriverPath = System.getProperty("webdriver.chrome.driver","resources/chromedriver.exe");
+        // Get current working directory safely
+        String currentDir = System.getProperty("user.dir");
+        if (currentDir == null) {
+            currentDir = "."; // Use current directory as fallback
+        }
+
+        // Set ChromeDriver path
+        String chromeDriverPath = currentDir + File.separator +
+                "resources" + File.separator + "chromedriver.exe";
 
         System.out.println("🔍 Looking for ChromeDriver at: " + chromeDriverPath);
 
-        // Check if ChromeDriver exists
+        // Check if ChromeDriver exists locally, otherwise use system PATH (for CI)
         File chromeDriverFile = new File(chromeDriverPath);
-        if (!chromeDriverFile.exists()) {
+        if (chromeDriverFile.exists()) {
+            System.setProperty("webdriver.chrome.driver", chromeDriverPath);
+            System.out.println("✅ Using local ChromeDriver");
+        } else if (System.getenv("CI") != null) {
+            // In CI environment, ChromeDriver should be in PATH
+            System.out.println("🤖 CI environment detected - using system ChromeDriver");
+        } else {
             System.err.println("❌ ChromeDriver not found at: " + chromeDriverPath);
-            System.err.println("💡 Make sure chromedriver.exe is in the resources folder");
-            throw new RuntimeException("ChromeDriver executable not found");
+            throw new RuntimeException("ChromeDriver executable not found at: " + chromeDriverPath);
         }
 
-        // Set the ChromeDriver system property
-        System.setProperty("webdriver.chrome.driver", chromeDriverPath);
-        System.out.println("✅ ChromeDriver path set successfully");
+        // Configure Chrome options
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--window-size=1366,768");
+        options.addArguments("--remote-allow-origins=*");
+
+        // Add headless mode for CI environment
+        String headless = System.getProperty("headless");
+        if ("true".equals(headless) || System.getenv("CI") != null) {
+            options.addArguments("--headless");
+            System.out.println("🤖 Running in headless mode (CI environment)");
+        }
 
         try {
             // Initialize driver
-            driver = new ChromeDriver();
+            driver = new ChromeDriver(options);
             driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
             driver.manage().window().maximize();
 
-
             System.out.println("✅ Browser setup completed successfully");
-            System.out.println("🌐 Chrome version: " + ((ChromeDriver) driver).getCapabilities().getCapability("browserVersion"));
+            String chromeVersion = ((ChromeDriver) driver).getCapabilities().getCapability("browserVersion").toString();
+            System.out.println("🌐 Chrome version: " + chromeVersion);
         } catch (Exception e) {
             System.err.println("❌ Failed to initialize Chrome driver: " + e.getMessage());
-            System.err.println("💡 Make sure Chrome browser is installed and ChromeDriver version matches Chrome version");
-            throw new RuntimeException("Browser setup failed", e);
+            throw new RuntimeException("Browser setup failed: " + e.getMessage());
         }
     }
 
