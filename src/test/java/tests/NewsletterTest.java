@@ -157,7 +157,7 @@ public class NewsletterTest extends BaseTest {
         NewsletterPage newsletterPage = new NewsletterPage(driver);
 
         // Enter invalid email and verify error
-        String invalidEmail = "invalid-email";
+        String invalidEmail = "new-invlaid-email";
         newsletterPage.subscribeWithEmail(invalidEmail);
 
         // Wait for error message
